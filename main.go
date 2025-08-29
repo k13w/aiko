@@ -7,14 +7,18 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/sns"
 )
 
 // Configurações
 var (
-	modelName     = "ft:gpt-4.1-mini-2025-04-14:aiko:webhooks-mini:C9i3m2e7"
-	localEndpoint = "http://localhost:8080/webhook"
-	numWebhooks   = 1
-	apiKey        = os.Getenv("OPENAI_API_KEY")
+	modelName   = "ft:gpt-4.1-mini-2025-04-14:aiko:webhooks-mini:C9i3m2e7"
+	topicArn    = "arn:aws:sns:us-east-1:000000000000:CB-SPI_IUGU-MANUAL-HOOK-PIX-PAID_SENT"
+	numWebhooks = 1
+	apiKey      = os.Getenv("OPENAI_API_KEY")
 )
 
 // Estrutura para chamadas da API OpenAI
@@ -81,14 +85,31 @@ func generateWebhook(prompt string) (string, error) {
 	return chatResp.Choices[0].Message.Content, nil
 }
 
-func sendWebhookToLocal(webhookText string) error {
-	resp, err := http.Post(localEndpoint, "application/x-www-form-urlencoded", bytes.NewBuffer([]byte(webhookText)))
+func publishWebhookToSNS(webhookText string) error {
+	// Criar sessão AWS
+	sess, err := session.NewSession(&aws.Config{
+		Region: aws.String("us-east-1"),
+	})
 	if err != nil {
-		return err
+		return fmt.Errorf("erro ao criar sessão AWS: %v", err)
 	}
-	defer resp.Body.Close()
 
-	fmt.Printf("Webhook enviado! Status code: %d\n", resp.StatusCode)
+	// Criar cliente SNS
+	snsClient := sns.New(sess)
+
+	// Publicar mensagem no tópico
+	input := &sns.PublishInput{
+		TopicArn: aws.String(topicArn),
+		Message:  aws.String(webhookText),
+		Subject:  aws.String("Webhook PIX Simulado"),
+	}
+
+	result, err := snsClient.Publish(input)
+	if err != nil {
+		return fmt.Errorf("erro ao publicar no SNS: %v", err)
+	}
+
+	fmt.Printf("Webhook publicado no SNS! MessageId: %s\n", *result.MessageId)
 	return nil
 }
 
@@ -111,8 +132,8 @@ func main() {
 
 		fmt.Printf("\nWebhook gerado:\n%s\n\n", webhookText)
 
-		if err := sendWebhookToLocal(webhookText); err != nil {
-			fmt.Println("Erro ao enviar webhook:", err)
+		if err := publishWebhookToSNS(webhookText); err != nil {
+			fmt.Println("Erro ao publicar webhook no SNS:", err)
 		}
 	}
 }
