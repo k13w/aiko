@@ -9,6 +9,7 @@ import (
 	"os"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sns"
 )
@@ -16,7 +17,7 @@ import (
 // Configurações
 var (
 	modelName   = "ft:gpt-4.1-mini-2025-04-14:aiko:webhooks-mini:C9i3m2e7"
-	topicArn    = "arn:aws:sns:us-east-1:000000000000:CB-SPI_IUGU-MANUAL-HOOK-PIX-PAID_SENT"
+	topicArn    = "arn:aws:sns:us-east-1:000000000000:CB-SPB-BANKSLIP_IP-SPB_PAYMENT_PAID"
 	numWebhooks = 1
 	apiKey      = os.Getenv("OPENAI_API_KEY")
 )
@@ -86,9 +87,14 @@ func generateWebhook(prompt string) (string, error) {
 }
 
 func publishWebhookToSNS(webhookText string) error {
-	// Criar sessão AWS
+	// Criar sessão AWS para LocalStack
 	sess, err := session.NewSession(&aws.Config{
-		Region: aws.String("us-east-1"),
+		Region:           aws.String("us-east-1"),
+		Endpoint:         aws.String("http://localhost:4566"),
+		DisableSSL:       aws.Bool(true),
+		S3ForcePathStyle: aws.Bool(true),
+		// Adicionar credenciais dummy para LocalStack
+		Credentials: credentials.NewStaticCredentials("test", "test", ""),
 	})
 	if err != nil {
 		return fmt.Errorf("erro ao criar sessão AWS: %v", err)
